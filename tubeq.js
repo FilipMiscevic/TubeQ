@@ -1,90 +1,23 @@
 //TubeQ
 
-var NYQUIST_FREQUENCY = 0.5 * 48000;//audioContext.sampleRate;
+var NYQUIST_FREQUENCY = 0.5 * 48000; //audioContext.sampleRate;
 
-var FUNDAMENTAL_FREQ = 2215;
-var OPEN_RESONATOR = true;
-var DIFFERENCE = 1.0 * FUNDAMENTAL_FREQ / (OPEN_RESONATOR + 1);
+var STOPPED = false;
+var FUNDAMENTAL_FREQ = 2216 / (STOPPED + 1); //f_0 = V/2L for closed, V/4L for open
+var OVERTONE = function(n) {
+	return STOPPED? FUNDAMENTAL_FREQ * (2*n-1) : FUNDAMENTAL_FREQ * n;
+};
+var MAX_N = STOPPED? (NYQUIST_FREQUENCY + FUNDAMENTAL_FREQ)/(2 * FUNDAMENTAL_FREQ) : NYQUIST_FREQUENCY / FUNDAMENTAL_FREQ
 var Q = 1.0;
 
-/* wait, I don't actually need this
-var CATHODE_TEMPERATURE = 800.0; //between 800-1000 degree Celsius for oxide-coated cathodes
-var VELOCITY = 331.3 + 0.6 * CATHODE_TEMPERATURE;
-function fFrequency(L, OPEN_RESONATOR = true, velocity=VELOCITY){
-	return Math.round(1.0 * VELOCITY / ( (2 + 2 * OPEN_RESONATOR) *L));
-};*/
-
-// resonance possesses an arithmetic property
-// arithmetic sequences
-function arithmeticSeries(a=0,d,n=0,){
-	n = (n>0)? n : arithmeticMaxN(a,d);
-	var s = new Uint16Array(n);
-
-	var i = 0;
-	var t = 0;
-	while (i!=n){
-		t = i + 1;
-		s[i] = arithmeticTerm(a,d,t);
-		i = t;
-	};
-	return s;
-};
-
-function arithmeticTerm(a=0,d,n){
-	return a + d*(n-(a!=0));
-};
-
-function arithmeticMaxN(a=0,d){
-	return (a==0)? Math.floor(NYQUIST_FREQUENCY / d) : Math.floor( (NYQUIST_FREQUENCY - a)/d + 1 );
-};
-
-
-// geometric sequences
-function geometricSeries(a=0,d,n=0,){
-	a = (a==0)? d: a;
-	n = (n>0)? n : geometricMaxN(a,d);
-	var s = new Uint16Array(n);
-
-	var i = 0;
-	var t = 0;
-	while (i!=n){
-		t = i + 1;
-		s[i] = geometricTerm(a,d,t);
-		i = t;
-	};
-	return s;
-};
-
-function geometricTerm(a,r,n){
-	return a*Math.pow(r,(n-1));
-};
-
-function geometricMaxN(a,r){
-	return 400;
-};
-
-// resonance to calculate amplitude
-function universalResonanceCurve(drivingFreq,resonanceFreq,damping){
+// resonance curve to calculate amplitude
+function resonanceAmplitude(drivingFreq,resonanceFreq,damping=Q){
 	var w = drivingFreq/resonanceFreq;
 	//var O = resonanceFreq;
 	var Q = damping;
 
 	return 1.0 / Math.sqrt( 1 + Math.pow(Q,2)*Math.pow((w-1.0/w),2) );
 };
-
-
-/*//distortion EQ class
-function distortionEQ(audioContext){
-
-};
-
-distortionEQ.prototype.setup = function(){
-
-};*/
-
-
-var n = arithmeticMaxN(FUNDAMENTAL_FREQ,DIFFERENCE);
-var f_n = arithmeticSeries(FUNDAMENTAL_FREQ,DIFFERENCE,n);
 
 var allFilters = new Object();
 
@@ -113,11 +46,11 @@ var runOnce = function(){
 	//generate peaking filters
 	var filter = lowShelf;
 
-	for (var i = 0; i<n; i++){
+	for (var i = 1; i <= MAX_N; i++){
 		var newFilter = context.createBiquadFilter();
 
 		newFilter.type = 'peaking';
-		newFilter.frequency.value = f_n[i];
+		newFilter.frequency.value = OVERTONE(i);
 		newFilter.gain.value = 0;
 
 		allFilters[ i ] = newFilter;
@@ -130,12 +63,11 @@ var runOnce = function(){
 	var fundamental = context.createBiquadFilter();
 	fundamental.type = 'allpass'
 	fundamental.gain.value = 0;
-	fundamental.frequency.value = 2215;
+	fundamental.frequency.value = FUNDAMENTAL_FREQ;
 	allFilters[ 'fundamental' ] = fundamental;
 
 	filter.connect(fundamental);
 	fundamental.connect(context.destination);
-
 
 	// add event listeners to update individual filter values with values from sliders
 	var ranges = document.querySelectorAll('input[type=range]');
@@ -146,33 +78,30 @@ var runOnce = function(){
 		});
 	});
 
-
 	// add event listeners to multiply the gain when the master gain is altered
 	var fundamentalGain = document.querySelector('[data-filter="fundamental"][data-param="gain"]');
 	var peakingSliders = document.querySelectorAll('input[data-filter-type="peaking"]');
 	fundamentalGain.addEventListener('input', function(){
 		peakingSliders.forEach(function(slider){
-			slider.value = fundamentalGain.value * universalResonanceCurve(parseInt(allFilters[ slider.getAttribute('data-filter') ][ 'frequency' ].value), FUNDAMENTAL_FREQ, Q);
+			slider.value = fundamentalGain.value * resonanceAmplitude(parseInt(allFilters[ slider.getAttribute('data-filter') ][ 'frequency' ].value), FUNDAMENTAL_FREQ, Q);
 			allFilters[ slider.getAttribute('data-filter') ][ 'gain' ].value = slider.value;
 		});
 	});
-
 
 	// add event listeners to update the peaking filter frequencies when the fundamental frequency is altered
 	var fundamentalFreq = document.querySelector('input[data-filter="fundamental"][data-param="frequency"]');
 	fundamentalFreq.addEventListener('input', function(){
 
 		FUNDAMENTAL_FREQ = parseInt(fundamentalFreq.value);
-		DIFFERENCE = 1.0 * FUNDAMENTAL_FREQ / (OPEN_RESONATOR + 1);
 
 		fundamental.frequency.value = FUNDAMENTAL_FREQ;
 
 		peakingSliders.forEach(function(slider){
-			var newFreq = parseInt(arithmeticTerm(FUNDAMENTAL_FREQ,
-				DIFFERENCE,1+parseInt(slider.getAttribute('data-filter'))));
-
+			// calculate new frequency
+			var newFreq = OVERTONE(parseInt(slider.getAttribute('data-filter')));
+			// change label
 			document.getElementById(slider.getAttribute('data-filter')).innerText = String(newFreq)+" \n20";
-
+			// update node value
 			allFilters[ slider.getAttribute('data-filter') ][ 'frequency' ].value = newFreq;
 		});
 	});
@@ -187,8 +116,9 @@ var runOnce = function(){
 window.onload = function(){
 	//create range sliders
 	var sliders = document.querySelector('div[id=peaking-sliders]');
-	for (var i = 0; i < Object.keys(f_n).length; i++) {
-		var f = f_n[i];
+	for (var i = 1; i <= MAX_N; i++) {
+
+		var f = OVERTONE(i);
 
 		var slider = document.createElement('div');
 		slider.setAttribute('class','range-slider');
@@ -232,14 +162,15 @@ window.onload = function(){
 	}
 	, {once:true});
 	
-	document.querySelector('input[type="file"]').addEventListener('change', function(event){
+	document.querySelector('input[type="file"]').addEventListener('change', function(){
 		var file = this.files[0],
 		fileURL = window.webkitURL.createObjectURL(file);
+		/*
 		console.log(file);
 		console.log('File name: '+file.name);
 		console.log('File type: '+file.type);
-		console.log('File BlobURL: '+ fileURL);
-
+		console.log('File BlobURL: '+ fileURL); 
+		*/
 		document.getElementById('media').src = fileURL;
 	});
 };
