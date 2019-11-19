@@ -1,0 +1,259 @@
+<html lang="en"><head>
+	<meta charset="UTF-8">
+	<title>TubeQ - a tube distortion simulator</title>
+	<link href="https://fonts.googleapis.com/css?family=Roboto:400,700" rel="stylesheet">
+	<link href="https://fonts.googleapis.com/css?family=Roboto:400,700" rel="stylesheet">
+	<script src="tubeq.js"></script>
+	<style>
+		body {
+			flex-direction: column;
+			font-family: 'Roboto', sans-serif;
+			margin: 0;
+			display: flex;
+			justify-content: center;
+			align-items: center;
+			background: linear-gradient(-65deg, #43C6AC, #5263b8);
+			-webkit-font-smoothing: antialiased;
+			-moz-osx-font-smoothing: grayscale;
+		}
+
+		.equalizer {
+			display: flex;
+		}
+
+		.section {
+			display: flex;
+			text-align: center;
+			flex-direction: column;
+			margin: 0 8px;
+		}
+		.section .title {
+			line-height: 40px;
+			font-size: 14px;
+			color: #fff;
+			font-weight: 700;
+		}
+
+		.big-title {
+			line-height: 40px;
+			font-size: 48px;
+			color: #fff;
+			font-weight: 700;
+			padding-bottom: 25px;
+		}
+		.section .sliders {
+			display: flex;
+		}
+
+		.range-slider {
+			width: 30px;
+			height: 152px;
+			background-color: rgba(0, 0, 0, 0.62);
+			display: flex;
+			flex-direction: column;
+			justify-content: space-between;
+			align-items: center;
+			padding-top: 6px;
+			padding-bottom: 8px;
+			margin-left: 4px;
+			margin-right: 4px;
+			border-radius: 4px;
+		}
+		.range-slider .param {
+			color: #f7f7f7;
+			font-size: 14px;
+			line-height: 14px;
+		}
+		.range-slider .scope {
+			color: #f7f7f7;
+			font-size: 12px;
+			line-height: 12px;
+		}
+		.range-slider .scope-min {
+			margin-top: 35px;
+		}
+		.range-slider input[type=range].vertical {
+			transform: rotateZ(-90deg);
+			width: 104px;
+			margin-top: 44px;
+		}
+
+		input[type=range] {
+			-webkit-appearance: none;
+			margin: 10px 0;
+			width: 100%;
+			background: transparent;
+		}
+
+		input[type=range]:focus {
+			outline: none;
+		}
+
+		input[type=range]::-webkit-slider-runnable-track {
+			width: 100%;
+			height: 6px;
+			cursor: pointer;
+			animate: 0.2s;
+			box-shadow: 0px 0px 0px #000000;
+			background: #D8D8D8;
+			border-radius: 3px;
+			border: 0px solid #000000;
+		}
+
+		input[type=range]::-webkit-slider-thumb {
+			box-shadow: -1px 1px 1px rgba(0, 0, 0, 0.32);
+			border: none;
+			height: 16px;
+			width: 16px;
+			border-radius: 8px;
+			background: #44BFA3;
+			cursor: pointer;
+			-webkit-appearance: none;
+			margin-top: -5px;
+		}
+
+		input[type=range]:focus::-webkit-slider-runnable-track {
+			background: #D8D8D8;
+		}
+
+		input[type=range]::-moz-range-track {
+			width: 100%;
+			height: 6px;
+			cursor: pointer;
+			animate: 0.2s;
+			background: #D8D8D8;
+			border-radius: 3px;
+			border: none;
+		}
+
+		input[type=range]::-moz-range-thumb {
+			box-shadow: -1px 1px 1px rgba(0, 0, 0, 0.32);
+			border: none;
+			height: 16px;
+			width: 16px;
+			border-radius: 8px;
+			background: #44BFA3;
+			cursor: pointer;
+		}
+
+		input[type=range]::-ms-track {
+			width: 100%;
+			height: 6px;
+			cursor: pointer;
+			animate: 0.2s;
+			background: transparent;
+			border-color: transparent;
+			color: transparent;
+		}
+
+		input[type=range]::-ms-fill-lower {
+			background: #D8D8D8;
+			border: none;
+			border-radius: 6px;
+		}
+
+		input[type=range]::-ms-fill-upper {
+			background: #D8D8D8;
+			border: none;
+			border-radius: 6px;
+		}
+
+		input[type=range]::-ms-thumb {
+			box-shadow: -1px 1px 1px rgba(0, 0, 0, 0.32);
+			border: none;
+			height: 16px;
+			width: 16px;
+			border-radius: 8px;
+			background: #44BFA3;
+			cursor: pointer;
+		}
+
+		input[type=range]:focus::-ms-fill-lower {
+			background: #D8D8D8;
+		}
+
+		input[type=range]:focus::-ms-fill-upper {
+			background: #D8D8D8;
+		}
+
+	</style>
+
+</head>
+<body translate="no" class="vsc-initialized">
+	<span class='big-title'>TubeQ</span>
+		<audio controls id='media'>
+			<source src="./audio.flac" type="audio/mpeg" />
+		</audio><input type="file" style="display: none" />
+	</div>
+	<div class="equalizer">
+		<div class="section">
+			<div class="title">Fundamental</div>
+			<div class="sliders">
+				<div class="range-slider">
+					<span class="scope">4200</span>
+					<input type="range" class="vertical" min="20" max="4200" step="1" value="2215" data-filter="fundamental" data-param="frequency">
+					<span class="scope scope-min">20</span>
+					<span class="param">Hz</span>
+				</div>
+				<div class="range-slider">
+					<span class="scope">20</span>
+					<input type="range" class="vertical" min="-20" max="20" value="0" data-filter="fundamental" data-param="gain">
+					<span class="scope scope-min">-20</span>
+					<span class="param">dB</span>
+				</div>
+			</div>
+		</div>			
+		<div class="section">
+			<div class="title">LF</div>
+			<div class="sliders">
+				<div class="range-slider">
+					<span class="scope">220</span>
+					<input type="range" class="vertical" min="35" max="220" step="1" value="35" data-filter="lowShelf" data-param="frequency">
+					<span class="scope scope-min">35</span>
+					<span class="param">Hz</span>
+				</div>
+				<div class="range-slider">
+					<span class="scope">20</span>
+					<input type="range" class="vertical" min="-20" max="20" value="0" data-filter="lowShelf" data-param="gain">
+					<span class="scope scope-min">-20</span>
+					<span class="param">dB</span>
+				</div>
+			</div>
+		</div>
+		<div class="section">
+			<div class="title" style="text-align:left">Peaking</div>
+			<div id="peaking-sliders" class="sliders">
+					<!--<div class="range-slider">
+						<span class="scope">5.9</span>
+						<input type="range" class="vertical" min="800" max="5900" step="100" value="800" data-filter="peaking" data-param="frequency">
+						<span class="scope scope-min">0.8</span>
+						<span class="param">kHz</span>
+					</div>
+					<div class="range-slider">
+						<span class="scope">20</span>
+						<input type="range" class="vertical" min="-20" max="20" value="20" data-filter="peaking" data-param="gain">
+						<span class="scope scope-min">-20</span>
+						<span class="param">dB</span>
+					</div>-->
+				</div>
+			</div>
+			<div class="section">
+				<div class="title">HF</div>
+				<div class="sliders">
+					<div class="range-slider">
+						<span class="scope">22</span>
+						<input type="range" class="vertical" min="4700" max="22000" step="100" value="22000" data-filter="highShelf" data-param="frequency">
+						<span class="scope scope-min">4.7</span>
+						<span class="param">kHz</span>
+					</div>
+					<div class="range-slider">
+						<span class="scope">20</span>
+						<input type="range" class="vertical" min="-20" max="20" value="0" data-filter="highShelf" data-param="gain">
+						<span class="scope scope-min">-20</span>
+						<span class="param">dB</span>
+					</div>
+				</div>
+			</div>
+		</div>
+
+	</body></html>

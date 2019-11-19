@@ -1,0 +1,1 @@
+"%ProgramFiles(x86)%\Google\Chrome\Application\chrome.exe" "file://%cd%/index.html" --disable-web-security --disable-gpu --user-data-dir=~/chromeTemper-data-dir=~/chromeTemp
