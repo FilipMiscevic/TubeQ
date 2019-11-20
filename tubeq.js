@@ -1,132 +1,114 @@
-//TubeQ
+class TubeQ {
 
-var NYQUIST_FREQUENCY = 0.5 * 48000; //audioContext.sampleRate;
+	constructor(context,source,fundamentalFreq=2216,stopped=false){
+		this.Q = 1.0;
+		this.NYQUIST_FREQUENCY = 0.5 * context.sampleRate;
 
-var STOPPED = false;
-var FUNDAMENTAL_FREQ = 2216 / (STOPPED + 1); //f_0 = V/2L for closed, V/4L for open
-var OVERTONE = function(n) {
-	return STOPPED? FUNDAMENTAL_FREQ * (2*n-1) : FUNDAMENTAL_FREQ * n;
-};
-var MAX_N = STOPPED? (NYQUIST_FREQUENCY + FUNDAMENTAL_FREQ)/(2 * FUNDAMENTAL_FREQ) : NYQUIST_FREQUENCY / FUNDAMENTAL_FREQ
-var Q = 1.0;
+		this.source = source;
 
-// resonance curve to calculate amplitude
-function resonanceAmplitude(drivingFreq,resonanceFreq,damping=Q){
-	var w = drivingFreq/resonanceFreq;
-	//var O = resonanceFreq;
-	var Q = damping;
+		this.STOPPED = stopped;
+		this.FUNDAMENTAL_FREQ = fundamentalFreq / (this.STOPPED + 1); //f_0 = V/2L for closed, V/4L for open, to theoretically hold V/L constant
+		this.MAX_N = Math.min(15,Math.floor(this.STOPPED? (this.NYQUIST_FREQUENCY + this.FUNDAMENTAL_FREQ)/(2 * this.FUNDAMENTAL_FREQ) : this.NYQUIST_FREQUENCY / this.FUNDAMENTAL_FREQ));
+		
+		this.allFilters = new Object();
 
-	return 1.0 / Math.sqrt( 1 + Math.pow(Q,2)*Math.pow((w-1.0/w),2) );
-};
+		var highShelf = context.createBiquadFilter();
+		var lowShelf = context.createBiquadFilter();
+		this.allFilters.highShelf = highShelf;
+		this.allFilters.lowShelf = lowShelf;
 
-var allFilters = new Object();
+		source.connect(highShelf);
+		highShelf.connect(lowShelf);
 
-var runOnce = function(){
+		highShelf.type = "highshelf";
+		highShelf.frequency.value = 22000;
+		highShelf.gain.value = 0;
 
-	var context = new window.AudioContext();
-	var mediaElement = document.querySelector('audio');
-	var source = context.createMediaElementSource(mediaElement);
+		lowShelf.type = "lowshelf";
+		lowShelf.frequency.value = 20;
+		lowShelf.gain.value = 0;
 
-	var highShelf = context.createBiquadFilter();
-	var lowShelf = context.createBiquadFilter();
-	allFilters.highShelf = highShelf;
-	allFilters.lowShelf = lowShelf;
+		var filter = lowShelf;
+		for (var i = 1; i <= this.MAX_N; i++){
+			var newFilter = context.createBiquadFilter();
 
-	source.connect(highShelf);
-	highShelf.connect(lowShelf)
+			newFilter.type = 'peaking';
+			newFilter.frequency.value = this.overtone(i);
+			newFilter.gain.value = 0;
 
-	highShelf.type = "highshelf";
-	highShelf.frequency.value = 22000;
-	highShelf.gain.value = 0;
+			this.allFilters[ i ] = newFilter;
 
-	lowShelf.type = "lowshelf";
-	lowShelf.frequency.value = 20;
-	lowShelf.gain.value = 0;
+			filter.connect(newFilter);
+			filter = newFilter;
+		}
 
-	//generate peaking filters
-	var filter = lowShelf;
+		//fundamental frequency node
+		var fundamental = context.createBiquadFilter();
+		fundamental.type = 'allpass'
+		fundamental.gain.value = 0;
+		fundamental.frequency.value = this.FUNDAMENTAL_FREQ;
+		this.allFilters[ 'fundamental' ] = fundamental;
 
-	for (var i = 1; i <= MAX_N; i++){
-		var newFilter = context.createBiquadFilter();
+		filter.connect(fundamental);
+	};
 
-		newFilter.type = 'peaking';
-		newFilter.frequency.value = OVERTONE(i);
-		newFilter.gain.value = 0;
+	// resonance curve to calculate amplitude
+	resonanceAmplitude(drivingFreq,damping=this.Q){
+		// TODO: make a function work with the overtone number
+		var w = drivingFreq/this.FUNDAMENTAL_FREQ;
+		//var O = resonanceFreq;
+		var Q = damping;
+		return 1.0 / Math.sqrt( 1 + Math.pow(Q,2) * Math.pow((w-1.0/w),2) );
+	};
 
-		allFilters[ i ] = newFilter;
+	// calculate nth overtone
+	overtone (n) {
+		return Math.min(this.NYQUIST_FREQUENCY, this.STOPPED? this.FUNDAMENTAL_FREQ * (2*n-1) : this.FUNDAMENTAL_FREQ * n);
+	};
 
-		filter.connect(newFilter);
-		filter = newFilter;
-	}
+	connect(destination){
+		this.allFilters.fundamental.disconnect();
+		this.allFilters.fundamental.connect(destination);
+	};
 
-	//fundamental frequency node
-	var fundamental = context.createBiquadFilter();
-	fundamental.type = 'allpass'
-	fundamental.gain.value = 0;
-	fundamental.frequency.value = FUNDAMENTAL_FREQ;
-	allFilters[ 'fundamental' ] = fundamental;
+	disconnect(){
+		this.allFilters.fundamental.disconnect();
+		this.source.disconnect(highShelf);
+	};
 
-	filter.connect(fundamental);
-	fundamental.connect(context.destination);
+	setFundamentalFrequency(newFreq,stopped=null){
+		if (stopped != null) this.STOPPED = Boolean(stopped);
+		this.FUNDAMENTAL_FREQ = newFreq / (this.STOPPED + 1);
+		this.allFilters.fundamental.frequency.value = this.FUNDAMENTAL_FREQ;
 
-	// add event listeners to update individual filter values with values from sliders
-	var ranges = document.querySelectorAll('input[type=range]');
-	ranges.forEach(function (range) {
-		range.value = allFilters[ range.getAttribute('data-filter') ][ range.getAttribute('data-param') ].value;
-		range.addEventListener('input', function () {
-			allFilters[ this.getAttribute('data-filter') ][ this.getAttribute('data-param') ].value = this.value;
-		});
-	});
+		for (var i=1; i <= this.MAX_N; i++){
+			this.allFilters[i].frequency.value = this.overtone(i);
+		};
+		return this.FUNDAMENTAL_FREQ;
+	};
 
-	// add event listeners to multiply the gain when the master gain is altered
-	var fundamentalGain = document.querySelector('[data-filter="fundamental"][data-param="gain"]');
-	var peakingSliders = document.querySelectorAll('input[data-filter-type="peaking"]');
-	fundamentalGain.addEventListener('input', function(){
-		peakingSliders.forEach(function(slider){
-			slider.value = fundamentalGain.value * resonanceAmplitude(parseInt(allFilters[ slider.getAttribute('data-filter') ][ 'frequency' ].value), FUNDAMENTAL_FREQ, Q);
-			allFilters[ slider.getAttribute('data-filter') ][ 'gain' ].value = slider.value;
-		});
-	});
+	setStop(bool){
+		this.setFundamentalFrequency(this.FUNDAMENTAL_FREQ * (1 + this.STOPPED), bool);
+	};
 
-	// add event listeners to update the peaking filter frequencies when the fundamental frequency is altered
-	var fundamentalFreq = document.querySelector('input[data-filter="fundamental"][data-param="frequency"]');
-	fundamentalFreq.addEventListener('input', function(){
-
-		FUNDAMENTAL_FREQ = parseInt(fundamentalFreq.value);
-
-		fundamental.frequency.value = FUNDAMENTAL_FREQ;
-
-		peakingSliders.forEach(function(slider){
-			// calculate new frequency
-			var newFreq = OVERTONE(parseInt(slider.getAttribute('data-filter')));
-			// change label
-			document.getElementById(slider.getAttribute('data-filter')).innerText = String(newFreq)+" \n20";
-			// update node value
-			allFilters[ slider.getAttribute('data-filter') ][ 'frequency' ].value = newFreq;
-		});
-	});
-
-	// set event listener to upload custom audio file
-	window.addEventListener('dblclick',function(){
-		document.querySelector('input[type="file"]').click();
-	}, false);
+	toggleStop(){
+		this.setFundamentalFrequency(this.FUNDAMENTAL_FREQ * (1 + this.STOPPED), !this.STOPPED);
+	};
 };
 
 
-window.onload = function(){
+function createSliders(n,id = 'peaking-sliders'){
+
 	//create range sliders
-	var sliders = document.querySelector('div[id=peaking-sliders]');
-	for (var i = 1; i <= MAX_N; i++) {
-
-		var f = OVERTONE(i);
-
+	var sliders = document.querySelector('div[id='+id+']');
+	for (var i = 1; i <= n; i++) {
 		var slider = document.createElement('div');
 		slider.setAttribute('class','range-slider');
 
 		var span1 = document.createElement('span');
 		span1.setAttribute('class','scope scope-max');
 		span1.setAttribute('id',i);
-		span1.innerText = String(f)+" \n20";
+		span1.innerText = " \n20";
 
 		var input = document.createElement('input')
 		input.setAttribute('type','range');
@@ -151,26 +133,100 @@ window.onload = function(){
 		slider.append(span2);
 		slider.append(span3);
 		sliders.append(slider);	
-	}
+	};
+}
 
-	window.addEventListener('click', function(){
-		runOnce();
-		// display welcome message
-		alert("Welcome to TubeQ, a tube distortion simulator prototype! \
-		Double click anywhere to upload your own sound file, \
-		or press play to hear the sample provided.");
-	}
-	, {once:true});
+
+function bindSliders(tube){
+
+	// add event listeners to update individual filter values with values from sliders
+	var ranges = document.querySelectorAll('input[type=range]');
+	ranges.forEach(function (range) {
+		range.value = tube.allFilters[ range.getAttribute('data-filter') ][ range.getAttribute('data-param') ].value;
+		range.addEventListener('input', function () {
+			tube.allFilters[ this.getAttribute('data-filter') ][ this.getAttribute('data-param') ].value = this.value;
+		});
+	});
+
+
+
+	// add event listeners to multiply the gain when the master gain is altered
+	var fundamentalGain = document.querySelector('[data-filter="fundamental"][data-param="gain"]');
+	var peakingSliders = document.querySelectorAll('input[data-filter-type="peaking"]');
 	
+	peakingSliders.forEach(function(slider){
+		// change label
+		var newFreq = tube.allFilters[parseInt(slider.getAttribute('data-filter'))].frequency.value;
+		document.getElementById(slider.getAttribute('data-filter')).innerText = String(newFreq)+" \n20";
+	});
+
+	fundamentalGain.addEventListener('input', function(){
+		peakingSliders.forEach(function(slider){
+			slider.value = fundamentalGain.value * tube.resonanceAmplitude(
+				parseInt( tube.allFilters[ slider.getAttribute('data-filter') ][ 'frequency' ].value)
+					);
+			tube.allFilters[ slider.getAttribute('data-filter') ][ 'gain' ].value = slider.value;
+		});
+	});
+
+	// add event listeners to update the peaking filter frequencies when the fundamental frequency is altered
+	var fundamentalFreq = document.querySelector('input[data-filter="fundamental"][data-param="frequency"]');
+	fundamentalFreq.addEventListener('input', function(){
+		
+		// update node value
+		tube.setFundamentalFrequency(parseInt(fundamentalFreq.value));
+
+		peakingSliders.forEach(function(slider){
+			// change label
+			var newFreq = tube.allFilters[parseInt(slider.getAttribute('data-filter'))].frequency.value;
+			document.getElementById(slider.getAttribute('data-filter')).innerText = String(newFreq)+" \n20";
+		});
+	});
+
+	// add keyup event for spacebar stop toggle
+	window.onkeyup = function(event){
+		if (event.key == " "){
+			tube.toggleStop();
+			peakingSliders.forEach(function(slider){
+			// change label
+			var newFreq = tube.allFilters[parseInt(slider.getAttribute('data-filter'))].frequency.value;
+			document.getElementById(slider.getAttribute('data-filter')).innerText = String(newFreq)+" \n20";
+		});
+		};
+	};
+};
+
+// initiate audiocontext on user interaction
+window.addEventListener('click', 
+	function(){
+
+	alert("Welcome to TubeQ, a tube distortion simulator prototype! \
+	Double click anywhere to upload your own sound file, \
+	or press play to hear the sample provided.");
+
+	var context = new window.AudioContext();
+	var mediaElement = document.querySelector('audio');
+	var source = context.createMediaElementSource(mediaElement);
+
+	var tube = new TubeQ(context,source);
+	bindSliders(tube);
+	tube.connect(context.destination);
+
+	},
+		{once:true}
+	);
+
+window.onload = function(){
+	createSliders(10);
+
 	document.querySelector('input[type="file"]').addEventListener('change', function(){
 		var file = this.files[0],
 		fileURL = window.webkitURL.createObjectURL(file);
-		/*
-		console.log(file);
-		console.log('File name: '+file.name);
-		console.log('File type: '+file.type);
-		console.log('File BlobURL: '+ fileURL); 
-		*/
 		document.getElementById('media').src = fileURL;
 	});
+};
+
+// set event listener to upload custom audio file
+window.ondblclick = function(){
+	document.querySelector('input[type="file"]').click();
 };
