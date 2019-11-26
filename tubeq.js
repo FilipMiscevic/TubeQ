@@ -1,19 +1,21 @@
 class TubeQ {
 
-	constructor(context,source,fundamentalFreq=2216,stopped=false){
-		this.Q = 1.0;
-		this.NYQUIST_FREQUENCY = 0.5 * context.sampleRate;
-
+	constructor(source,fundamentalFreq=2216,stopped=false){
 		this.source = source;
+		this.context = source.context;
+		this.Q = 1.0;
+		this.MAX_SLIDERS = 10;
+		this.NYQUIST_FREQUENCY = 0.5 * this.context.sampleRate;
+
 
 		this.STOPPED = stopped;
 		this.FUNDAMENTAL_FREQ = fundamentalFreq / (this.STOPPED + 1); //f_0 = V/2L for closed, V/4L for open, to theoretically hold V/L constant
-		this.MAX_N = Math.min(15,Math.floor(this.STOPPED? (this.NYQUIST_FREQUENCY + this.FUNDAMENTAL_FREQ)/(2 * this.FUNDAMENTAL_FREQ) : this.NYQUIST_FREQUENCY / this.FUNDAMENTAL_FREQ));
+		this.MAX_N = Math.min(this.MAX_SLIDERS,Math.floor(this.STOPPED? (this.NYQUIST_FREQUENCY + this.FUNDAMENTAL_FREQ)/(2 * this.FUNDAMENTAL_FREQ) : this.NYQUIST_FREQUENCY / this.FUNDAMENTAL_FREQ));
 		
 		this.allFilters = new Object();
 
-		var highShelf = context.createBiquadFilter();
-		var lowShelf = context.createBiquadFilter();
+		var highShelf= this.context.createBiquadFilter();
+		var lowShelf = this.context.createBiquadFilter();
 		this.allFilters.highShelf = highShelf;
 		this.allFilters.lowShelf = lowShelf;
 
@@ -30,7 +32,7 @@ class TubeQ {
 
 		var filter = lowShelf;
 		for (var i = 1; i <= this.MAX_N; i++){
-			var newFilter = context.createBiquadFilter();
+			var newFilter = this.context.createBiquadFilter();
 
 			newFilter.type = 'peaking';
 			newFilter.frequency.value = this.overtone(i);
@@ -43,7 +45,7 @@ class TubeQ {
 		}
 
 		//fundamental frequency node
-		var fundamental = context.createBiquadFilter();
+		var fundamental =this.context.createBiquadFilter();
 		fundamental.type = 'allpass'
 		fundamental.gain.value = 0;
 		fundamental.frequency.value = this.FUNDAMENTAL_FREQ;
@@ -55,6 +57,10 @@ class TubeQ {
 	// resonance curve to calculate amplitude
 	resonanceAmplitude(drivingFreq,damping=this.Q){
 		// TODO: make a function work with the overtone number
+		if (drivingFreq==0){
+			console.log('WARNING: drivingFreq is 0, gain would be NaN');
+			return 0;
+		};
 		var w = drivingFreq/this.FUNDAMENTAL_FREQ;
 		//var O = resonanceFreq;
 		var Q = damping;
@@ -73,7 +79,7 @@ class TubeQ {
 
 	disconnect(){
 		this.allFilters.fundamental.disconnect();
-		this.source.disconnect(highShelf);
+		this.source.disconnect(this.allFilters.highShelf);
 	};
 
 	setFundamentalFrequency(newFreq,stopped=null){
@@ -87,6 +93,13 @@ class TubeQ {
 		return this.FUNDAMENTAL_FREQ;
 	};
 
+	setGain(gain){
+		for (var i = 1; i <= this.MAX_N; i++){
+			//console.log('GAIN,NGAIN',this.allFilters[i].gain.value,1.0 * gain * this.resonanceAmplitude(this.allFilters[i].frequency.value));
+			this.allFilters[i].gain.value = 1.0 * gain * this.resonanceAmplitude(this.allFilters[i].frequency.value);
+		};
+	};
+
 	setStop(bool){
 		this.setFundamentalFrequency(this.FUNDAMENTAL_FREQ * (1 + this.STOPPED), bool);
 	};
@@ -97,7 +110,7 @@ class TubeQ {
 };
 
 
-function createSliders(n,id = 'peaking-sliders'){
+function createSliders(n,id){
 
 	//create range sliders
 	var sliders = document.querySelector('div[id='+id+']');
@@ -137,18 +150,19 @@ function createSliders(n,id = 'peaking-sliders'){
 }
 
 
-function bindSliders(tube){
-
+function bindSliders(tube,id = 'peaking-sliders1'){
 	// add event listeners to update individual filter values with values from sliders
 	var ranges = document.querySelectorAll('input[type=range]');
 	ranges.forEach(function (range) {
+		console.log(range.parentNode.parentNode.getAttribute('id'),id);
+		if (range.parentNode.parentNode.getAttribute('id') == id){
 		range.value = tube.allFilters[ range.getAttribute('data-filter') ][ range.getAttribute('data-param') ].value;
 		range.addEventListener('input', function () {
 			tube.allFilters[ this.getAttribute('data-filter') ][ this.getAttribute('data-param') ].value = this.value;
 		});
+	}
+
 	});
-
-
 
 	// add event listeners to multiply the gain when the master gain is altered
 	var fundamentalGain = document.querySelector('[data-filter="fundamental"][data-param="gain"]');
@@ -161,12 +175,25 @@ function bindSliders(tube){
 	});
 
 	fundamentalGain.addEventListener('input', function(){
+
+
+		tube.setGain(fundamentalGain.value);
+
 		peakingSliders.forEach(function(slider){
-			slider.value = fundamentalGain.value * tube.resonanceAmplitude(
-				parseInt( tube.allFilters[ slider.getAttribute('data-filter') ][ 'frequency' ].value)
-					);
-			tube.allFilters[ slider.getAttribute('data-filter') ][ 'gain' ].value = slider.value;
-		});
+
+		//console.log(slider.parentNode.parentNode.getAttribute('id'));
+		var sliderSet = Boolean(slider.parentNode.parentNode.getAttribute('id'))? slider.parentNode.parentNode.getAttribute('id')[slider.parentNode.parentNode.getAttribute('id').length-1]: 0;
+
+		if (parseInt(sliderSet) == 1){
+			//console.log('tube1:',tube.allFilters[ slider.getAttribute('data-filter') ][ 'gain' ].value);
+			slider.value = tube.allFilters[ slider.getAttribute('data-filter') ][ 'gain' ].value;
+
+		}if(parseInt(sliderSet) == 2){
+			//console.log('tube2:',tube2.allFilters[ slider.getAttribute('data-filter') ][ 'gain' ].value);
+			//slider.value =tube2.allFilters[ slider.getAttribute('data-filter') ][ 'gain' ].value;
+		}
+	})
+
 	});
 
 	// add event listeners to update the peaking filter frequencies when the fundamental frequency is altered
@@ -196,6 +223,10 @@ function bindSliders(tube){
 	};
 };
 
+var audioContext; 
+var mediaElement;
+var source; 
+
 // initiate audiocontext on user interaction
 window.addEventListener('click', 
 	function(){
@@ -204,20 +235,20 @@ window.addEventListener('click',
 	Double click anywhere to upload your own sound file, \
 	or press play to hear the sample provided.");
 
-	var context = new window.AudioContext();
-	var mediaElement = document.querySelector('audio');
-	var source = context.createMediaElementSource(mediaElement);
+	audioContext = new window.AudioContext();
+	source = audioContext.createMediaElementSource(mediaElement);
 
-	var tube = new TubeQ(context,source);
-	bindSliders(tube);
-	tube.connect(context.destination);
-
+	var tube = new TubeQ(source);
+	bindSliders(tube,'peaking-sliders1');
+	tube.connect(audioContext.destination);
 	},
 		{once:true}
 	);
 
 window.onload = function(){
-	createSliders(10);
+	mediaElement = document.querySelector('audio');
+	
+	createSliders(10,'peaking-sliders1');
 
 	document.querySelector('input[type="file"]').addEventListener('change', function(){
 		var file = this.files[0],
