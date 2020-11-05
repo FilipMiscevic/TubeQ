@@ -2,8 +2,9 @@
 	<meta charset="UTF-8">
 	<title>TubeQ - a tube distortion simulator</title>
 	<link href="https://fonts.googleapis.com/css?family=Roboto:400,700" rel="stylesheet">
+	<link href="https://fonts.googleapis.com/css?family=Roboto:400,700" rel="stylesheet">
 	<script src="tubeq.js"></script>
-	<script src="../LeslieQ/leslieq.js"></script>
+	<script src="./addons/vibeq.js"></script>
 	<style>
 		body {
 			flex-direction: column;
@@ -182,7 +183,7 @@
 <body translate="no" class="vsc-initialized">
 	<span class='big-title'>TubeQ</span>
 		<audio controls id='media'>
-			<!--source type="audio/mpeg" /-->
+			<source src="./audio.flac" type="audio/mpeg" />
 		</audio><input type="file" style="display: none" />
 	</div>
 	<div class="equalizer">

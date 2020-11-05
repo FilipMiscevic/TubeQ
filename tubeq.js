@@ -45,7 +45,7 @@ class TubeQ {
 		}
 
 		//fundamental frequency node
-		var fundamental  = this.context.createBiquadFilter();
+		var fundamental =this.context.createBiquadFilter();
 		fundamental.type = 'allpass'
 		fundamental.gain.value = 0;
 		fundamental.frequency.value = this.FUNDAMENTAL_FREQ;
@@ -224,34 +224,8 @@ function bindSliders(tube,id = 'peaking-sliders1'){
 };
 
 var audioContext; 
-var streamNode;
+var mediaElement;
 var source; 
-var tube;
-
-function loadBuffer(url){
-	var request = new XMLHttpRequest();
-	request.open('GET', url, true);
-	request.responseType = 'arraybuffer';
-	request.onload = function() {
-			var audioData = request.response;
-
-				audioContext.decodeAudioData(audioData, function(buffer) {
-				source.buffer = buffer;
-				source.loop = true;
-			    source.start(0);
-
-			    streamNode = audioContext.createMediaStreamDestination();
-				audioElem = document.querySelector('audio');
-			    audioElem.srcObject = streamNode.stream;
-
-			    tube = new TubeQ(source);
-				bindSliders(tube,'peaking-sliders1');
-				tube.connect(streamNode);
-			},
-			function(e){ console.log("Could not decode audiostream: " + e.err); });
-		}
-		request.send();
-}
 
 // initiate audiocontext on user interaction
 window.addEventListener('click', 
@@ -261,15 +235,18 @@ window.addEventListener('click',
 	Double click anywhere to upload your own sound file, \
 	or press play to hear the sample provided.");
 
-	audioContext = new AudioContext();
-	source = audioContext.createBufferSource();
-	loadBuffer('audio.flac');
-	
+	audioContext = new window.AudioContext();
+	source = audioContext.createMediaElementSource(mediaElement);
+
+	var tube = new TubeQ(source);
+	bindSliders(tube,'peaking-sliders1');
+	tube.connect(audioContext.destination);
 	},
 		{once:true}
 	);
 
 window.onload = function(){
+	mediaElement = document.querySelector('audio');
 	
 	createSliders(10,'peaking-sliders1');
 
@@ -280,7 +257,7 @@ window.onload = function(){
 	});
 };
 
-//TODO: fix
+// set event listener to upload custom audio file
 window.ondblclick = function(){
-	//document.querySelector('input[type="file"]').click();
+	document.querySelector('input[type="file"]').click();
 };
